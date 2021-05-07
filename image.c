@@ -3,7 +3,7 @@
 #include <time.h>
 #include <string.h>
 #include "image.h"
-#include <pthreads.h>
+#include <pthread.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -52,12 +52,12 @@ uint8_t getPixelValue(Image* srcImage,int x,int y,int bit,Matrix algorithm){
     return result;
 }
 
-int rowLength = 0;
+convoluteStruct *convoluteData;
 void loopThread(int rank){
-    for (row=rank;row<srcImage->height;row = row + rowLength){
-        for (pix=0;pix<srcImage->width;pix++){
-            for (bit=0;bit<srcImage->bpp;bit++){
-                destImage->data[Index(pix,row,srcImage->width,bit,srcImage->bpp)]=getPixelValue(srcImage,pix,row,bit,algorithm);
+    for (int row=rank;row<convoluteData->srcImage->height;row = row + convoluteData->rowLength){
+        for (int pix=0;pix<convoluteData->srcImage->width;pix++){
+            for (int bit=0;bit<convoluteData->srcImage->bpp;bit++){
+                convoluteData->destImage->data[Index(pix,row,convoluteData->srcImage->width,bit,convoluteData->srcImage->bpp)]=getPixelValue(convoluteData->srcImage,pix,row,bit,convoluteData->algorithm);
             }
         }
     }
@@ -72,12 +72,17 @@ void convolute(Image* srcImage,Image* destImage,Matrix algorithm, int numberOfTh
     int row,pix,bit,span;
     span=srcImage->bpp*srcImage->bpp;
 
-    rowLength = srcImage->height/numberOfThreads;
+    int rowLength = srcImage->height/numberOfThreads;
 
     pthread_t * threadArray = malloc(sizeof(pthread_t) * numberOfThreads);
 
+    //Put data in global struct so that threads can use it.
+    convoluteData->srcImage = srcImage;
+    convoluteData->destImage = destImage;
+    convoluteData->rowLength = rowLength;
+
     for(int index = 0; index < numberOfThreads; index++){
-        pthread_create(&threadArray[index], NULL, &loopThread, index++);
+        pthread_create(&threadArray[index], NULL, &loopThread, index);
     }
 
     for(int index = 0; index< numberOfThreads; index++){
@@ -116,7 +121,7 @@ int main(int argc,char** argv){
     printf("Input number of threads: ");
     scanf("%d", &numberOfThreads);
 
-    t1=time(NULL)
+    t1=time(NULL);
 
     stbi_set_flip_vertically_on_load(0); 
     if (argc!=3){

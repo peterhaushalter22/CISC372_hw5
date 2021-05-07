@@ -3,7 +3,7 @@
 #include <time.h>
 #include <string.h>
 #include "image.h"
-#include <omp.h>
+#include <pthreads.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -52,6 +52,17 @@ uint8_t getPixelValue(Image* srcImage,int x,int y,int bit,Matrix algorithm){
     return result;
 }
 
+int rowLength = 0;
+void loopThread(int rank){
+    for (row=rank;row<srcImage->height;row = row + rowLength){
+        for (pix=0;pix<srcImage->width;pix++){
+            for (bit=0;bit<srcImage->bpp;bit++){
+                destImage->data[Index(pix,row,srcImage->width,bit,srcImage->bpp)]=getPixelValue(srcImage,pix,row,bit,algorithm);
+            }
+        }
+    }
+}
+
 //convolute:  Applies a kernel matrix to an image
 //Parameters: srcImage: The image being convoluted
 //            destImage: A pointer to a  pre-allocated (including space for the pixel array) structure to receive the convoluted image.  It should be the same size as srcImage
@@ -61,16 +72,19 @@ void convolute(Image* srcImage,Image* destImage,Matrix algorithm, int numberOfTh
     int row,pix,bit,span;
     span=srcImage->bpp*srcImage->bpp;
 
-    #pragma omp parallel num_threads(numberOfThreads)
-        #pragma omp for
-            for (row=0;row<srcImage->height;row++){
-                for (pix=0;pix<srcImage->width;pix++){
-                    for (bit=0;bit<srcImage->bpp;bit++){
-                        destImage->data[Index(pix,row,srcImage->width,bit,srcImage->bpp)]=getPixelValue(srcImage,pix,row,bit,algorithm);
-                    }
-                }
-            }
-    
+    rowLength = srcImage->height/numberOfThreads;
+
+    pthread_t * threadArray = malloc(sizeof(pthread_t) * numberOfThreads);
+
+    for(int index = 0; index < numberOfThreads; index++){
+        pthread_create(&threadArray[index], NULL, &loopThread, index++);
+    }
+
+    for(int index = 0; index< numberOfThreads; index++){
+        pthread_join(threadArray[index], NULL);
+    }
+
+    free(threadArray);
 }
 
 //Usage: Prints usage information for the program
@@ -96,8 +110,13 @@ enum KernelTypes GetKernelType(char* type){
 //argv is expected to take 2 arguments.  First is the source file name (can be jpg, png, bmp, tga).  Second is the lower case name of the algorithm.
 int main(int argc,char** argv){
     long t1,t2;
-    t1=time(NULL);
+
     int numberOfThreads = 0;
+
+    printf("Input number of threads: ");
+    scanf("%d", &numberOfThreads);
+
+    t1=time(NULL)
 
     stbi_set_flip_vertically_on_load(0); 
     if (argc!=3){
@@ -121,9 +140,6 @@ int main(int argc,char** argv){
     destImage.height=srcImage.height;
     destImage.width=srcImage.width;
     destImage.data=malloc(sizeof(uint8_t)*destImage.width*destImage.bpp*destImage.height);
-
-    printf("Input number of threads: ");
-    scanf("%d", &numberOfThreads);
 
     convolute(&srcImage,&destImage, algorithms[type], numberOfThreads);
     stbi_write_png("output.png",destImage.width,destImage.height,destImage.bpp,destImage.data,destImage.bpp*destImage.width);

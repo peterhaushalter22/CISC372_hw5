@@ -96,8 +96,12 @@ enum KernelTypes GetKernelType(char* type){
 //argv is expected to take 2 arguments.  First is the source file name (can be jpg, png, bmp, tga).  Second is the lower case name of the algorithm.
 int main(int argc,char** argv){
     long t1,t2;
-    t1=time(NULL);
     int numberOfThreads = 0;
+
+    printf("Input number of threads: ");
+    scanf("%d", &numberOfThreads);
+
+    t1=time(NULL);
 
     stbi_set_flip_vertically_on_load(0); 
     if (argc!=3){
@@ -121,9 +125,6 @@ int main(int argc,char** argv){
     destImage.height=srcImage.height;
     destImage.width=srcImage.width;
     destImage.data=malloc(sizeof(uint8_t)*destImage.width*destImage.bpp*destImage.height);
-
-    printf("Input number of threads: ");
-    scanf("%d", &numberOfThreads);
 
     convolute(&srcImage,&destImage, algorithms[type], numberOfThreads);
     stbi_write_png("output.png",destImage.width,destImage.height,destImage.bpp,destImage.data,destImage.bpp*destImage.width);
